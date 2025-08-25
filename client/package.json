@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aztec/bb.js": "0.82.2",
+    "@coinbase/onchainkit": "^0.38.19",
     "@neondatabase/serverless": "^1.0.0",
     "@noir-lang/noir_js": "1.0.0-beta.3",
     "@noir-lang/noir_wasm": "1.0.0-beta.3",

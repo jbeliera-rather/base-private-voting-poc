@@ -8,7 +8,6 @@ import { createClient } from '@supabase/supabase-js';
 import { addActiveVoting, addInactiveVoting, checkExpiredVotings } from './voting-status';
 
 import JwtCircuitJSON from '@/public/circuit/jwtnoir.json' assert { type: 'json' };
-import { concatenatePublicInputs } from '@/app/utils/noir';
 
 // Initialize Supabase client
 const supabase = createClient(

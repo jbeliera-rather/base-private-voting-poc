@@ -7,6 +7,7 @@ import type { Voting } from "./server/db/voting-db";
 import { formatLocalDate } from "./utils/locale";
 import Tooltip from "./components/Tooltip";
 import { tooltipTexts } from "./utils/tooltipTexts";
+import { useMiniKit } from '@coinbase/onchainkit/minikit';
 
 interface VotingGridProps {
   filteredVotings: Voting[];
@@ -122,6 +123,13 @@ export default function Home() {
   const [closedPage, setClosedPage] = useState(1);
   
   const itemsPerPage = 6;
+
+ //Initialize MiniKit
+ const { setFrameReady, isFrameReady } = useMiniKit();
+
+  useEffect(() => {
+   if (!isFrameReady) setFrameReady();
+  }, [isFrameReady, setFrameReady]);
 
   const fetchVotings = useCallback(async () => {
     try {
