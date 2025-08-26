@@ -40,7 +40,8 @@ This guide will help you set up and configure Supabase for the voting applicatio
      status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'pending')),
      max_voters INTEGER,
      vote_threshold INTEGER,
-     is_public BOOLEAN NOT NULL DEFAULT false
+     is_public BOOLEAN NOT NULL DEFAULT false,
+     amount DECIMAL
    );
 
    -- Create voting_options table
@@ -49,6 +50,7 @@ This guide will help you set up and configure Supabase for the voting applicatio
      voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE,
      name TEXT NOT NULL,
      description TEXT NOT NULL,
+     address TEXT,
      votes INTEGER NOT NULL DEFAULT 0
    );
 
@@ -90,7 +92,8 @@ This guide will help you set up and configure Supabase for the voting applicatio
        status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'pending')),
        max_voters INTEGER,
        vote_threshold INTEGER,
-       is_public BOOLEAN NOT NULL DEFAULT false
+       is_public BOOLEAN NOT NULL DEFAULT false,
+       amount DECIMAL
      );
    END;
    $$ LANGUAGE plpgsql;
@@ -103,6 +106,7 @@ This guide will help you set up and configure Supabase for the voting applicatio
        voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE,
        name TEXT NOT NULL,
        description TEXT NOT NULL,
+       address TEXT,
        votes INTEGER NOT NULL DEFAULT 0
      );
    END;
@@ -148,6 +152,17 @@ This guide will help you set up and configure Supabase for the voting applicatio
    USING (auth.role() = 'service_role');
    ```
 
+4. **Migration for Existing Databases**
+   If you already have a database set up, run this migration to add the new fields:
+   
+   ```sql
+   -- Add amount column to votings table
+   ALTER TABLE votings ADD COLUMN IF NOT EXISTS amount DECIMAL;
+   
+   -- Add address column to voting_options table
+   ALTER TABLE voting_options ADD COLUMN IF NOT EXISTS address TEXT;
+   ```
+
 ## Database Schema
 
 The application uses the following tables:
@@ -162,12 +177,14 @@ The application uses the following tables:
    - `max_voters`: INTEGER
    - `vote_threshold`: INTEGER
    - `is_public`: BOOLEAN NOT NULL DEFAULT false
+   - `amount`: DECIMAL
 
 2. **voting_options**
    - `id`: BIGSERIAL PRIMARY KEY
    - `voting_id`: BIGINT REFERENCES votings(id)
    - `name`: TEXT NOT NULL
    - `description`: TEXT NOT NULL
+   - `address`: TEXT
    - `votes`: INTEGER NOT NULL DEFAULT 0
 
 3. **nullifiers**

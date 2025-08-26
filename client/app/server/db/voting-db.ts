@@ -50,11 +50,35 @@ export interface Voting {
   maxVoters?: number;
   voteThreshold?: number;
   isPublic: boolean;
+  amount?: number;
   options: {
     name: string;
     description: string;
+    address: string;
   }[];
   results: number[];
+}
+
+interface DatabaseVotingOption {
+  id: number;
+  name: string;
+  description: string;
+  address: string;
+  votes: number;
+}
+
+interface DatabaseVoting {
+  id: number;
+  title: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  status: 'active' | 'closed' | 'pending';
+  max_voters?: number;
+  vote_threshold?: number;
+  is_public: boolean;
+  amount?: number;
+  voting_options: DatabaseVotingOption[];
 }
 
 export async function verifyProof(circuit: CompiledCircuit, proof: ProofData): Promise<boolean> {
@@ -81,6 +105,7 @@ export async function getVotings(): Promise<Voting[]> {
         voting_options (
           name,
           description,
+          address,
           votes
         )
       `)
@@ -88,7 +113,7 @@ export async function getVotings(): Promise<Voting[]> {
 
     if (error) throw error;
 
-    return votings.map((v: any) => ({
+    return votings.map((v: DatabaseVoting) => ({
       id: v.id,
       title: v.title,
       description: v.description,
@@ -98,11 +123,13 @@ export async function getVotings(): Promise<Voting[]> {
       maxVoters: v.max_voters,
       voteThreshold: v.vote_threshold,
       isPublic: v.is_public,
-      options: v.voting_options.sort((a: any, b: any) => a.id - b.id).map((vo: any) => ({
+      amount: v.amount,
+      options: v.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => ({
         name: vo.name,
-        description: vo.description
+        description: vo.description,
+        address: vo.address
       })),
-      results: v.voting_options.sort((a: any, b: any) => a.id - b.id).map((vo: any) => vo.votes)
+      results: v.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => vo.votes)
     }));
   } catch (error) {
     console.error('Error getting votings:', error);
@@ -121,6 +148,7 @@ export async function getVotingById(id: number): Promise<Voting | null> {
           id,
           name,
           description,
+          address,
           votes
         )
       `)
@@ -140,11 +168,13 @@ export async function getVotingById(id: number): Promise<Voting | null> {
       maxVoters: voting.max_voters,
       voteThreshold: voting.vote_threshold,
       isPublic: voting.is_public,
-      options: voting.voting_options.sort((a: any, b: any) => a.id - b.id).map((vo: any) => ({
+      amount: voting.amount,
+      options: voting.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => ({
         name: vo.name,
-        description: vo.description
+        description: vo.description,
+        address: vo.address
       })),
-      results: voting.voting_options.sort((a: any, b: any) => a.id - b.id).map((vo: any) => vo.votes)
+      results: voting.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => vo.votes)
     };
   } catch (error) {
     console.error('Error getting voting by ID:', error);
@@ -182,7 +212,8 @@ export async function addVoting(voting: Voting): Promise<Voting> {
         status,
         max_voters: voting.maxVoters,
         vote_threshold: voting.voteThreshold,
-        is_public: voting.isPublic
+        is_public: voting.isPublic,
+        amount: voting.amount
       })
       .select()
       .single();
@@ -197,6 +228,7 @@ export async function addVoting(voting: Voting): Promise<Voting> {
           voting_id: newVoting.id,
           name: option.name,
           description: option.description,
+          address: option.address,
           votes: 0
         }))
       );

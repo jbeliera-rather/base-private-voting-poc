@@ -10,6 +10,7 @@ import { tooltipTexts } from "../utils/tooltipTexts";
 interface VotingOption {
   name: string;
   description: string;
+  address: string;
 }
 
 // Helper function to format date for datetime-local input
@@ -35,10 +36,11 @@ export default function CreateVoting() {
     description: "",
     startDate: formatDateForInput(now),
     endDate: formatDateForInput(tomorrow),
-    options: [{ name: "", description: "" }, { name: "", description: "" }],
+    options: [{ name: "", description: "", address: "" }, { name: "", description: "", address: "" }],
     isPublic: false,
     maxVoters: "",
     voteThreshold: "",
+    amount: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,32 @@ export default function CreateVoting() {
       return;
     }
 
+    // Validate amount if provided
+    if (formData.amount && (Number.isNaN(Number(formData.amount)) || Number(formData.amount) < 0)) {
+      setError("Amount must be a non-negative number");
+      setLoading(false);
+      return;
+    }
+
+    // Validate addresses if amount > 0
+    const amount = Number(formData.amount);
+    if (amount > 0) {
+      for (let i = 0; i < filteredOptions.length; i++) {
+        const option = filteredOptions[i];
+        if (!option.address || option.address.trim() === "") {
+          setError(`On-chain address is required for option "${option.name}" when amount is greater than zero`);
+          setLoading(false);
+          return;
+        }
+        // Basic Ethereum address validation (starts with 0x and 42 characters total)
+        if (!/^0x[a-fA-F0-9]{40}$/.test(option.address.trim())) {
+          setError(`Invalid Ethereum address format for option "${option.name}"`);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     try {
       const response = await fetch("/api/voting", {
         method: "POST",
@@ -95,6 +123,7 @@ export default function CreateVoting() {
           options: filteredOptions,
           maxVoters: formData.maxVoters ? Number(formData.maxVoters) : undefined,
           voteThreshold: formData.voteThreshold ? Number(formData.voteThreshold) : undefined,
+          amount: formData.amount ? Number(formData.amount) : undefined,
         }),
       });
 
@@ -130,7 +159,7 @@ export default function CreateVoting() {
   const addOption = () => {
     setFormData((prev) => ({
       ...prev,
-      options: [...prev.options, { name: "", description: "" }],
+      options: [...prev.options, { name: "", description: "", address: "" }],
     }));
   };
 
@@ -178,6 +207,26 @@ export default function CreateVoting() {
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 px-3 py-2 transition-colors"
               />
+            </div>
+
+            <div>
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-900 dark:text-white">
+                Amount to Transfer (Optional)
+              </label>
+              <input
+                type="number"
+                id="amount"
+                name="amount"
+                min="0"
+                step="0.01"
+                value={formData.amount}
+                onChange={handleChange}
+                placeholder="0.00"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 px-3 py-2 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+              />
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Amount to be transferred to the winning option's address
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -284,7 +333,7 @@ export default function CreateVoting() {
               </div>
               <div className="space-y-4">
                 {formData.options.map((option, index) => (
-                  <div key={`option-${index}`} className="p-4 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
+                  <div key={`option-${index}-${option.name || 'empty'}`} className="p-4 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <label htmlFor={`option-${index}-name`} className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -325,6 +374,28 @@ export default function CreateVoting() {
                         rows={2}
                         className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 px-3 py-2 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                       />
+                    </div>
+                    <div>
+                      <label 
+                        htmlFor={`option-${index}-address`}
+                        className="block text-sm font-medium text-gray-900 dark:text-white mb-1"
+                      >
+                        On-Chain Address {Number(formData.amount) > 0 && <span className="text-red-500">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        id={`option-${index}-address`}
+                        value={option.address}
+                        onChange={(e) => handleOptionChange(index, "address", e.target.value)}
+                        placeholder="0x..."
+                        required={Number(formData.amount) > 0}
+                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 px-3 py-2 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                      />
+                      {Number(formData.amount) > 0 && (
+                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                          Required when amount is greater than zero
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
