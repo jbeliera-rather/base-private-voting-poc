@@ -30,7 +30,7 @@ This guide will help you set up and configure Supabase for the voting applicatio
    Run the following SQL in the Supabase SQL editor:
 
    ```sql
-   -- Create votings table
+   -- Create main tables 
    CREATE TABLE IF NOT EXISTS votings (
      id BIGSERIAL PRIMARY KEY,
      title TEXT NOT NULL,
@@ -41,10 +41,11 @@ This guide will help you set up and configure Supabase for the voting applicatio
      max_voters INTEGER,
      vote_threshold INTEGER,
      is_public BOOLEAN NOT NULL DEFAULT false,
-     amount DECIMAL
+     amount DECIMAL,
+     funds_distributed BOOLEAN NOT NULL DEFAULT false,
+     distribution_tx_hash TEXT
    );
 
-   -- Create voting_options table
    CREATE TABLE IF NOT EXISTS voting_options (
      id BIGSERIAL PRIMARY KEY,
      voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE,
@@ -54,14 +55,13 @@ This guide will help you set up and configure Supabase for the voting applicatio
      votes INTEGER NOT NULL DEFAULT 0
    );
 
-   -- Create nullifiers table
    CREATE TABLE IF NOT EXISTS nullifiers (
      id BIGSERIAL PRIMARY KEY,
      nullifier TEXT NOT NULL UNIQUE,
      voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE
    );
 
-   -- Create function to add a vote
+   -- Create function to add a vote (atomic operation)
    CREATE OR REPLACE FUNCTION add_vote(
      p_nullifier TEXT,
      p_voting_id BIGINT,
@@ -79,116 +79,119 @@ This guide will help you set up and configure Supabase for the voting applicatio
    END;
    $$ LANGUAGE plpgsql;
 
-   -- Create functions for table creation
-   CREATE OR REPLACE FUNCTION create_votings_table()
-   RETURNS void AS $$
-   BEGIN
-     CREATE TABLE IF NOT EXISTS votings (
-       id BIGSERIAL PRIMARY KEY,
-       title TEXT NOT NULL,
-       description TEXT NOT NULL,
-       start_date TIMESTAMP WITH TIME ZONE NOT NULL,
-       end_date TIMESTAMP WITH TIME ZONE NOT NULL,
-       status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'pending')),
-       max_voters INTEGER,
-       vote_threshold INTEGER,
-       is_public BOOLEAN NOT NULL DEFAULT false,
-       amount DECIMAL
-     );
-   END;
-   $$ LANGUAGE plpgsql;
-
-   CREATE OR REPLACE FUNCTION create_voting_options_table()
-   RETURNS void AS $$
-   BEGIN
-     CREATE TABLE IF NOT EXISTS voting_options (
-       id BIGSERIAL PRIMARY KEY,
-       voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE,
-       name TEXT NOT NULL,
-       description TEXT NOT NULL,
-       address TEXT,
-       votes INTEGER NOT NULL DEFAULT 0
-     );
-   END;
-   $$ LANGUAGE plpgsql;
-
-   CREATE OR REPLACE FUNCTION create_nullifiers_table()
-   RETURNS void AS $$
-   BEGIN
-     CREATE TABLE IF NOT EXISTS nullifiers (
-       id BIGSERIAL PRIMARY KEY,
-       nullifier TEXT NOT NULL UNIQUE,
-       voting_id BIGINT REFERENCES votings(id) ON DELETE CASCADE
-     );
-   END;
-   $$ LANGUAGE plpgsql;
-
-   -- Create RLS policies
+   -- Enable Row Level Security
    ALTER TABLE votings ENABLE ROW LEVEL SECURITY;
    ALTER TABLE voting_options ENABLE ROW LEVEL SECURITY;
    ALTER TABLE nullifiers ENABLE ROW LEVEL SECURITY;
 
-   -- Allow public read access to votings
-   CREATE POLICY "Allow public read access to votings"
-   ON votings FOR SELECT
-   USING (true);
+   -- Create RLS policies (using IF NOT EXISTS pattern)
+   DO $$
+   BEGIN
+     -- Public read access to votings
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_policies 
+       WHERE tablename = 'votings' 
+       AND policyname = 'Allow public read access to votings'
+     ) THEN
+       CREATE POLICY "Allow public read access to votings"
+       ON votings FOR SELECT
+       USING (true);
+     END IF;
 
-   -- Allow public read access to voting_options
-   CREATE POLICY "Allow public read access to voting_options"
-   ON voting_options FOR SELECT
-   USING (true);
+     -- Public read access to voting_options
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_policies 
+       WHERE tablename = 'voting_options' 
+       AND policyname = 'Allow public read access to voting_options'
+     ) THEN
+       CREATE POLICY "Allow public read access to voting_options"
+       ON voting_options FOR SELECT
+       USING (true);
+     END IF;
 
-   -- Allow service role full access
-   CREATE POLICY "Allow service role full access to votings"
-   ON votings FOR ALL
-   USING (auth.role() = 'service_role');
+     -- Service role full access to votings
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_policies 
+       WHERE tablename = 'votings' 
+       AND policyname = 'Allow service role full access to votings'
+     ) THEN
+       CREATE POLICY "Allow service role full access to votings"
+       ON votings FOR ALL
+       USING (auth.role() = 'service_role');
+     END IF;
 
-   CREATE POLICY "Allow service role full access to voting_options"
-   ON voting_options FOR ALL
-   USING (auth.role() = 'service_role');
+     -- Service role full access to voting_options
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_policies 
+       WHERE tablename = 'voting_options' 
+       AND policyname = 'Allow service role full access to voting_options'
+     ) THEN
+       CREATE POLICY "Allow service role full access to voting_options"
+       ON voting_options FOR ALL
+       USING (auth.role() = 'service_role');
+     END IF;
 
-   CREATE POLICY "Allow service role full access to nullifiers"
-   ON nullifiers FOR ALL
-   USING (auth.role() = 'service_role');
+     -- Service role full access to nullifiers
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_policies 
+       WHERE tablename = 'nullifiers' 
+       AND policyname = 'Allow service role full access to nullifiers'
+     ) THEN
+       CREATE POLICY "Allow service role full access to nullifiers"
+       ON nullifiers FOR ALL
+       USING (auth.role() = 'service_role');
+     END IF;
+   END
+   $$;
    ```
 
-4. **Migration for Existing Databases**
-   If you already have a database set up, run this migration to add the new fields:
-   
-   ```sql
-   -- Add amount column to votings table
-   ALTER TABLE votings ADD COLUMN IF NOT EXISTS amount DECIMAL;
-   
-   -- Add address column to voting_options table
-   ALTER TABLE voting_options ADD COLUMN IF NOT EXISTS address TEXT;
-   ```
 
 ## Database Schema
 
 The application uses the following tables:
 
-1. **votings**
-   - `id`: BIGSERIAL PRIMARY KEY
-   - `title`: TEXT NOT NULL
-   - `description`: TEXT NOT NULL
-   - `start_date`: TIMESTAMP WITH TIME ZONE NOT NULL
-   - `end_date`: TIMESTAMP WITH TIME ZONE NOT NULL
-   - `status`: TEXT NOT NULL (active/closed/pending)
-   - `max_voters`: INTEGER
-   - `vote_threshold`: INTEGER
-   - `is_public`: BOOLEAN NOT NULL DEFAULT false
-   - `amount`: DECIMAL
+### **votings**
+- `id`: BIGSERIAL PRIMARY KEY
+- `title`: TEXT NOT NULL
+- `description`: TEXT NOT NULL
+- `start_date`: TIMESTAMP WITH TIME ZONE NOT NULL
+- `end_date`: TIMESTAMP WITH TIME ZONE NOT NULL
+- `status`: TEXT NOT NULL (active/closed/pending)
+- `max_voters`: INTEGER (optional limit on total voters)
+- `vote_threshold`: INTEGER (optional threshold to auto-close)
+- `is_public`: BOOLEAN NOT NULL DEFAULT false (whether results are public)
+- `amount`: DECIMAL (ETH amount for funding)
+- `funds_distributed`: BOOLEAN NOT NULL DEFAULT false (distribution status)
+- `distribution_tx_hash`: TEXT (transaction hash for fund distribution)
 
-2. **voting_options**
-   - `id`: BIGSERIAL PRIMARY KEY
-   - `voting_id`: BIGINT REFERENCES votings(id)
-   - `name`: TEXT NOT NULL
-   - `description`: TEXT NOT NULL
-   - `address`: TEXT
-   - `votes`: INTEGER NOT NULL DEFAULT 0
+### **voting_options**
+- `id`: BIGSERIAL PRIMARY KEY
+- `voting_id`: BIGINT REFERENCES votings(id) ON DELETE CASCADE
+- `name`: TEXT NOT NULL
+- `description`: TEXT NOT NULL
+- `address`: TEXT (recipient address for funding)
+- `votes`: INTEGER NOT NULL DEFAULT 0
 
-3. **nullifiers**
-   - `id`: BIGSERIAL PRIMARY KEY
-   - `nullifier`: TEXT NOT NULL UNIQUE
-   - `voting_id`: BIGINT REFERENCES votings(id)
+### **nullifiers**
+- `id`: BIGSERIAL PRIMARY KEY
+- `nullifier`: TEXT NOT NULL UNIQUE (prevents double voting)
+- `voting_id`: BIGINT REFERENCES votings(id) ON DELETE CASCADE
+
+## Features
+
+- **Zero-Knowledge Voting**: Uses nullifiers to prevent double voting while maintaining privacy
+- **Funding Support**: Elections can have ETH amounts that are automatically distributed to winners
+- **Flexible Timing**: Elections can be scheduled for future dates and auto-close
+- **Public/Private Results**: Results can be visible during voting or only after closure
+- **Vote Thresholds**: Elections can auto-close when a threshold is reached
+- **Voter Limits**: Maximum number of voters can be set
+
+## Security
+
+- **Row Level Security (RLS)**: Enabled on all tables
+- **Public Read Access**: Voting data is publicly readable
+- **Service Role Access**: Full access for server operations
+- **Atomic Voting**: Vote additions are atomic to prevent race conditions
+- **Duplicate Prevention**: Nullifiers prevent duplicate votes
+- **Fund Protection**: Distribution tracking prevents duplicate transactions
 

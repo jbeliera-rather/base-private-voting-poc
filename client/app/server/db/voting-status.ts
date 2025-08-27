@@ -82,6 +82,7 @@ export async function checkExpiredVotings() {
       
       if (shouldClose) {
         expiredIds.push(i);
+        console.log(`Closing voting ${votingId} ("${voting.title}") - expired or conditions met`);
         await closeVoting(votingId);
       } 
     }

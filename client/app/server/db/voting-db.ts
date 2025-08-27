@@ -6,6 +6,8 @@ import { UltraHonkBackend } from '@aztec/bb.js';
 import type { CompiledCircuit, ProofData } from '@noir-lang/types';
 import { createClient } from '@supabase/supabase-js';
 import { addActiveVoting, addInactiveVoting, checkExpiredVotings } from './voting-status';
+import { createProtocolWalletClient } from '../init';
+import { parseEther } from 'viem';
 
 import JwtCircuitJSON from '@/public/circuit/jwtnoir.json' assert { type: 'json' };
 
@@ -51,6 +53,8 @@ export interface Voting {
   voteThreshold?: number;
   isPublic: boolean;
   amount?: number;
+  fundsDistributed?: boolean;
+  distributionTxHash?: string;
   options: {
     name: string;
     description: string;
@@ -78,6 +82,8 @@ interface DatabaseVoting {
   vote_threshold?: number;
   is_public: boolean;
   amount?: number;
+  funds_distributed?: boolean;
+  distribution_tx_hash?: string;
   voting_options: DatabaseVotingOption[];
 }
 
@@ -124,6 +130,8 @@ export async function getVotings(): Promise<Voting[]> {
       voteThreshold: v.vote_threshold,
       isPublic: v.is_public,
       amount: v.amount,
+      fundsDistributed: v.funds_distributed || false,
+      distributionTxHash: v.distribution_tx_hash || undefined,
       options: v.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => ({
         name: vo.name,
         description: vo.description,
@@ -169,6 +177,8 @@ export async function getVotingById(id: number): Promise<Voting | null> {
       voteThreshold: voting.vote_threshold,
       isPublic: voting.is_public,
       amount: voting.amount,
+      fundsDistributed: voting.funds_distributed || false,
+      distributionTxHash: voting.distribution_tx_hash || undefined,
       options: voting.voting_options.sort((a: DatabaseVotingOption, b: DatabaseVotingOption) => a.id - b.id).map((vo: DatabaseVotingOption) => ({
         name: vo.name,
         description: vo.description,
@@ -253,15 +263,112 @@ export async function addVoting(voting: Voting): Promise<Voting> {
   }
 }
 
-// Close a voting
+// Distribute funds to winning option
+async function distributeFunds(voting: Voting): Promise<string | null> {
+  try {
+    if (!voting.amount || voting.amount <= 0) {
+      return null; // No funds to distribute
+    }
+
+    // Check if funds have already been distributed
+    if (voting.fundsDistributed) {
+      console.log(`Funds already distributed for election ${voting.id}. TX: ${voting.distributionTxHash}`);
+      return voting.distributionTxHash || null;
+    }
+
+    // Find the winning option (highest votes)
+    const maxVotes = Math.max(...voting.results);
+    const winningIndex = voting.results.indexOf(maxVotes);
+    
+    if (maxVotes === 0) {
+      console.log(`No votes cast in election ${voting.id}, funds will remain in protocol`);
+      // Mark as distributed even if no votes to prevent retries
+      await supabase
+        .from('votings')
+        .update({ 
+          funds_distributed: true,
+          distribution_tx_hash: null 
+        })
+        .eq('id', voting.id);
+      return null;
+    }
+
+    const winningOption = voting.options[winningIndex];
+    if (!winningOption?.address) {
+      console.error(`Winning option for voting ${voting.id} has no address specified`);
+      // Mark as distributed to prevent retries
+      await supabase
+        .from('votings')
+        .update({ 
+          funds_distributed: true,
+          distribution_tx_hash: null 
+        })
+        .eq('id', voting.id);
+      return null;
+    }
+
+    const walletClient = createProtocolWalletClient();
+    const amount = parseEther(voting.amount.toString());
+
+    console.log(`Distributing ${voting.amount} ETH to winning option "${winningOption.name}" at address ${winningOption.address}`);
+
+    // Send the transaction
+    const txHash = await walletClient.sendTransaction({
+      to: winningOption.address as `0x${string}`,
+      value: amount,
+    });
+
+    // Mark funds as distributed in database
+    await supabase
+      .from('votings')
+      .update({ 
+        funds_distributed: true,
+        distribution_tx_hash: txHash 
+      })
+      .eq('id', voting.id);
+
+    console.log(`Funds distributed successfully. Transaction hash: ${txHash}`);
+    return txHash;
+  } catch (error) {
+    console.error('Error distributing funds:', error);
+    throw error;
+  }
+}
+
+// Close a voting and distribute funds if applicable
 export async function closeVoting(id: number): Promise<boolean> {
   try {
+    // Get the voting details before closing
+    const voting = await getVotingById(id);
+    if (!voting) {
+      throw new Error(`Voting with id ${id} not found`);
+    }
+
+    // Close the voting first
     const { error } = await supabase
       .from('votings')
       .update({ status: 'closed' })
       .eq('id', id);
 
     if (error) throw error;
+
+    // Distribute funds if applicable
+    if (voting.amount && voting.amount > 0) {
+      try {
+        const txHash = await distributeFunds(voting);
+        if (txHash) {
+          console.log(`Election ${id} ("${voting.title}") closed and funds distributed. TX: ${txHash}`);
+        } else {
+          console.log(`Election ${id} ("${voting.title}") closed. No funds distributed.`);
+        }
+      } catch (fundError) {
+        console.error(`Failed to distribute funds for voting ${id}:`, fundError);
+        // Don't throw here - we want the voting to remain closed even if fund distribution fails
+      }
+    } else {
+      console.log(`Election ${id} ("${voting.title}") closed. No funding configured.`);
+    }
+
     return true;
   } catch (error) {
     console.error('Error closing voting:', error);
