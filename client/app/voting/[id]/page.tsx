@@ -129,6 +129,15 @@ export default function VotingPage() {
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Election will end when any option reaches this number of votes</p>
                     </div>
                   )}
+                  {voting.amount && voting.amount > 0 && (
+                    <div className="md:col-span-2">
+                      <span className="font-medium text-gray-900 dark:text-white">Funding Amount:</span>{" "}
+                      {voting.amount} ETH
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        This amount will be transferred to the winning option's designated address
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -140,7 +149,17 @@ export default function VotingPage() {
                 {voting.options.map((option, index) => (
                   <div key={`${option.name}-${index}`} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
                     <h3 className="font-medium text-gray-900 dark:text-white">{option.name}</h3>
-                    <p className="text-gray-700 dark:text-gray-300 text-sm">{option.description}</p>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-3">{option.description}</p>
+                    {voting.amount && voting.amount > 0 && option.address && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-900 dark:text-white">Funding Address:</span>
+                        </div>
+                        <p className="text-xs font-mono text-gray-600 dark:text-gray-400 mt-1 break-all">
+                          {option.address}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -155,9 +174,30 @@ export default function VotingPage() {
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
                   {(() => {
                     const totalVotes = voting.results.reduce((sum, votes) => sum + votes, 0);
+                    const winningIndex = voting.results.indexOf(Math.max(...voting.results));
+                    const isWinnerDetermined = voting.status === 'closed' && totalVotes > 0;
+                    
                     return (
                       <>
                         <div className="mb-2 text-gray-900 dark:text-white">Total Votes: {totalVotes}</div>
+                        {voting.amount && voting.amount > 0 && isWinnerDetermined && (
+                          <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-800 dark:text-green-200 font-medium">🏆 Winner:</span>
+                              <span className="text-green-900 dark:text-green-100 font-semibold">
+                                {voting.options[winningIndex]?.name}
+                              </span>
+                            </div>
+                            {voting.options[winningIndex]?.address && (
+                              <div className="mt-2">
+                                <span className="text-xs text-green-700 dark:text-green-300">Funding will be sent to:</span>
+                                <p className="text-xs font-mono text-green-800 dark:text-green-200 break-all">
+                                  {voting.options[winningIndex].address}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="space-y-2">
                           {voting.results.map((votes, index) => {
                             const option = voting.options[index];
@@ -166,17 +206,24 @@ export default function VotingPage() {
                               : 0;
                             
                             const displayPercentage = percentage.toFixed(1);
+                            const isWinner = isWinnerDetermined && index === winningIndex;
                             
                             return (
-                              <div key={`${option.name}-${index}`} className="flex items-center gap-2">
-                                <div className="w-32 font-medium text-gray-900 dark:text-white">{option.name}:</div>
+                              <div key={`${option.name}-${index}`} className={`flex items-center gap-2 ${isWinner ? 'p-2 bg-green-50 dark:bg-green-900/20 rounded' : ''}`}>
+                                <div className={`w-32 font-medium ${isWinner ? 'text-green-900 dark:text-green-100' : 'text-gray-900 dark:text-white'}`}>
+                                  {isWinner && '🏆 '}{option.name}:
+                                </div>
                                 <div className="flex-1 h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                   <div 
-                                    className="h-full bg-purple-600 dark:bg-purple-500 rounded-full transition-all duration-300"
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isWinner 
+                                        ? 'bg-green-600 dark:bg-green-500' 
+                                        : 'bg-purple-600 dark:bg-purple-500'
+                                    }`}
                                     style={{ width: `${percentage}%`, maxWidth: '100%' }}
                                   />
                                 </div>
-                                <div className="w-20 text-right text-sm text-gray-700 dark:text-gray-300">
+                                <div className={`w-20 text-right text-sm ${isWinner ? 'text-green-700 dark:text-green-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
                                   {votes} ({displayPercentage}%)
                                 </div>
                               </div>
