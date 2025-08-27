@@ -4,9 +4,7 @@ import { coinbaseWallet } from 'wagmi/connectors';
 
 export function getConfig() {
 
-  const chain = process.env.NEXT_PUBLIC_CHAIN === 'base' ? base : 
-                process.env.NEXT_PUBLIC_CHAIN === 'baseSepolia' ? baseSepolia :
-                hardhat;
+  const chain = process.env.NEXT_PUBLIC_CHAIN === 'base' ? base :   baseSepolia;
 
   return createConfig({
     connectors: [
@@ -24,8 +22,7 @@ export function getConfig() {
     chains: [chain],
     transports: {
       [base.id]: http(),
-      [baseSepolia.id]: http(),
-      [hardhat.id]: http(),
+      [baseSepolia.id]: http()
     },
   });
 }

@@ -9,8 +9,7 @@ import { MiniKitProvider } from '@coinbase/onchainkit/minikit';
 import { OnchainKitProvider } from '@coinbase/onchainkit';
 import { 
   baseSepolia, 
-  base, 
-  localhost
+  base
 } from 'wagmi/chains'; 
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         return base;
       case 'basesepolia':
         return baseSepolia;
-      case 'localhost':
-        return localhost;
       default:
         console.warn(`Chain "${process.env.NEXT_PUBLIC_CHAIN}" not recognized, defaulting to baseSepolia`);
         return baseSepolia;
