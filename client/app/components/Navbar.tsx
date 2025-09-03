@@ -4,12 +4,41 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useState } from "react";
 import Tooltip from "./Tooltip";
 import { tooltipTexts } from "../utils/tooltipTexts";
+import { FarcasterAuth } from "../utils/farcaster-auth";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      const result = await FarcasterAuth.signIn(window.location.pathname);
+      if (result.success) {
+        // Notify Farcaster client of successful authentication
+        FarcasterAuth.notifyAuthStatus(true);
+        router.refresh();
+      } else {
+        console.error('Farcaster sign in failed:', result.error);
+        // Notify Farcaster client of authentication error
+        FarcasterAuth.notifyAuthStatus(false, result.error);
+        // Fallback to standard NextAuth sign in
+        signIn("google", { callbackUrl: window.location.pathname });
+      }
+    } catch (error) {
+      console.error('Farcaster auth error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      FarcasterAuth.notifyAuthStatus(false, errorMessage);
+      // Fallback to standard NextAuth sign in
+      signIn("google", { callbackUrl: window.location.pathname });
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut({ 
@@ -79,10 +108,18 @@ export default function Navbar() {
               <Tooltip text={tooltipTexts.signIn} showIcon>
                 <button
                   type="button"
-                  onClick={() => signIn("google", { callbackUrl: window.location.pathname })}
-                  className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-600 dark:hover:bg-blue-700 text-blue-900 dark:text-white px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-default"
+                  onClick={handleSignIn}
+                  disabled={isSigningIn || status === 'loading'}
+                  className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-600 dark:hover:bg-blue-700 text-blue-900 dark:text-white px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-default disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Sign In
+                  {isSigningIn ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-900 dark:border-white" />
+                      Signing In...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
                 </button>
               </Tooltip>
             )}

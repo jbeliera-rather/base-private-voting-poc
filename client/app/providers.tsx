@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { ThemeProvider } from './components/ThemeProvider';
 import { FloatingActions } from './components/FloatingActions';
 import { MiniKitProvider } from '@coinbase/onchainkit/minikit';
+import DeeplinkHandler from './components/DeeplinkHandler';
 
 import { OnchainKitProvider } from '@coinbase/onchainkit';
 import { 
@@ -67,6 +68,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   paymaster: process.env.NEXT_PUBLIC_PAYMASTER_ENDPOINT, 
                 }}
               >
+              <DeeplinkHandler />
               {children}
               <FloatingActions />
               </OnchainKitProvider>

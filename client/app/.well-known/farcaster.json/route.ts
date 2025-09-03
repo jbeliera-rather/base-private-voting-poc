@@ -1,3 +1,9 @@
+declare const process: {
+  env: {
+    [key: string]: string | undefined;
+  };
+};
+
 function withValidProperties(properties: Record<string, undefined | string | string[]>) {
     return Object.fromEntries(
       Object.entries(properties).filter(([_, value]) => (Array.isArray(value) ? value.length > 0 : !!value))
@@ -30,8 +36,10 @@ function withValidProperties(properties: Record<string, undefined | string | str
         ogTitle: process.env.NEXT_PUBLIC_APP_OG_TITLE,
         ogDescription: process.env.NEXT_PUBLIC_APP_OG_DESCRIPTION,
         ogImageUrl: process.env.NEXT_PUBLIC_APP_OG_IMAGE,
+        // OAuth and external link support  
+        features: ['oauth', 'external_links'] as string[],
         // use only while testing
-        noindex: "true",
+        //noindex: "true",
       }),
     });
   }
