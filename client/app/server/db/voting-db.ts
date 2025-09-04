@@ -18,29 +18,6 @@ const supabase = createClient(
 );
 
 // Initialize database tables
-export async function initializeDatabase() {
-  try {
-    // Create votings table
-    const { error: votingsError } = await supabase.rpc('create_votings_table');
-    if (votingsError) {
-      throw votingsError;
-    }
-
-    // Create voting_options table
-    const { error: optionsError } = await supabase.rpc('create_voting_options_table');
-    if (optionsError) {
-      throw optionsError;
-    }
-
-    // Create nullifiers table
-    const { error: nullifiersError } = await supabase.rpc('create_nullifiers_table');
-    if (nullifiersError) {
-      throw nullifiersError;
-    }
-  } catch (error) {
-    throw new Error('Failed to initialize database');
-  }
-}
 
 export interface Voting {
   id?: number;

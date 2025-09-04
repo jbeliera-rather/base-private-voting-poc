@@ -119,7 +119,7 @@ export default function DeviceCodeAuth({ onSuccess, onError }: DeviceCodeAuthPro
 
             if (result?.ok) {
               toast.success('Successfully authenticated!');
-              onSuccess?.();
+              window.location.href = '/';
               return; // Stop polling
             }
             throw new Error('Failed to complete authentication');
@@ -285,23 +285,50 @@ export default function DeviceCodeAuth({ onSuccess, onError }: DeviceCodeAuthPro
             )}
             
             {deviceData.verification_uri_complete ? (
-              <a
-                href={deviceData.verification_uri_complete}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  // Force open in new popup window with specific dimensions
+                  if (typeof window !== 'undefined' && window.open) {
+                    const popup = window.open(
+                      deviceData.verification_uri_complete, 
+                      'google-auth-popup',
+                      'width=500,height=700,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,directories=no,status=no'
+                    );
+                    if (popup) {
+                      popup.focus();
+                    }
+                  } else if (deviceData.verification_uri_complete) {
+                    window.location.href = deviceData.verification_uri_complete;
+                  }
+                }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 text-center block"
               >
                 Open Authentication Page (Pre-filled Code)
-              </a>
+              </button>
             ) : (
-              <a
-                href={deviceData.verification_uri || 'https://www.google.com/device'}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  const url = deviceData.verification_uri || 'https://www.google.com/device';
+                  // Force open in new popup window with specific dimensions
+                  if (typeof window !== 'undefined' && window.open) {
+                    const popup = window.open(
+                      url, 
+                      'google-auth-popup',
+                      'width=500,height=700,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,directories=no,status=no'
+                    );
+                    if (popup) {
+                      popup.focus();
+                    }
+                  } else {
+                    window.location.href = url;
+                  }
+                }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 text-center block"
               >
                 Open Google Authentication
-              </a>
+              </button>
             )}
           </div>
 

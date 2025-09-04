@@ -1,26 +1,11 @@
 import NextAuth from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import crypto from "node:crypto";
-import { NextRequest } from "next/server";
 
 export const dynamic = 'force-dynamic';
 
 const handler = NextAuth({
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "dummy",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "dummy",
-      authorization: {
-        params: {
-          scope: "openid email profile",
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code",
-        }
-      },
-      idToken: true,
-    }),
     Credentials({
       name: "bridge",
       credentials: {
@@ -64,27 +49,10 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account, user }) {
-      console.log('JWT callback triggered:', {
-        hasAccount: !!account,
-        hasUser: !!user,
-        accountKeys: account ? Object.keys(account) : [],
-        userKeys: user ? Object.keys(user) : [],
-        accountPreview: account ? {
-          provider: account.provider,
-          type: account.type,
-          hasIdToken: !!account.id_token,
-          hasAccessToken: !!account.access_token,
-        } : null,
-      });
-
-      // Handle device authentication flow (credentials provider) FIRST if tokens are present on user
+    async jwt({ token, user }) {
+      // Handle device authentication flow
       if (user && 'tokens' in user && (user as { tokens?: { access_token?: string; refresh_token?: string; id_token?: string } }).tokens) {
         const userTokens = (user as { tokens: { access_token?: string; refresh_token?: string; id_token?: string } }).tokens;
-        console.log('Processing device authentication flow:', {
-          idToken: userTokens.id_token ? `${userTokens.id_token.substring(0, 50)}...` : 'MISSING',
-          accessToken: userTokens.access_token ? `${userTokens.access_token.substring(0, 50)}...` : 'MISSING',
-        });
         
         return {
           ...token,
@@ -97,31 +65,10 @@ const handler = NextAuth({
           },
         };
       }
-
-      // Standard OAuth flow
-      if (account && user) {
-        console.log('Processing standard OAuth flow:', {
-          idToken: account.id_token ? `${account.id_token.substring(0, 50)}...` : 'MISSING',
-          accessToken: account.access_token ? `${account.access_token.substring(0, 50)}...` : 'MISSING',
-          provider: account.provider,
-        });
-        
-        return {
-          ...token,
-          accessToken: account.access_token,
-          refreshToken: account.refresh_token,
-          idToken: account.id_token,
-          customData: {
-            userId: user.id,
-            email: user.email,
-          },
-        };
-      }
       
-      // If we don't have account/user updates, try to ensure idToken exists using refresh_token
+      // If we don't have user updates, try to ensure idToken exists using refresh_token
       if (!token.idToken && token.refreshToken) {
         try {
-          console.log('Attempting to refresh Google tokens to obtain missing id_token');
           const clientId = process.env.GOOGLE_DEVICE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
           const clientSecret = process.env.GOOGLE_DEVICE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
           if (clientId && clientSecret) {
@@ -137,32 +84,18 @@ const handler = NextAuth({
             });
             if (res.ok) {
               const data = await res.json();
-              // Update idToken and optionally accessToken
               token.idToken = data.id_token || token.idToken;
               token.accessToken = data.access_token || token.accessToken;
-              console.log('Successfully refreshed id_token via Google');
-            } else {
-              console.warn('Failed to refresh Google tokens', { status: res.status });
             }
-          } else {
-            console.warn('Missing Google client credentials; cannot refresh id_token');
           }
         } catch (e) {
-          console.warn('Error refreshing Google tokens for id_token', e);
+          // Silent fail
         }
       }
 
-      console.log('JWT callback: No account or user tokens found, returning existing token');
       return token;
     },
     async session({ session, token }) {
-      console.log('Session callback - token object:', {
-        hasAccessToken: !!token.accessToken,
-        hasIdToken: !!token.idToken,
-        tokenKeys: Object.keys(token),
-        tokenPreview: token,
-      });
-      
       return {
         ...session,
         token: token,
@@ -171,7 +104,7 @@ const handler = NextAuth({
         customData: token.customData,
       };
     },
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn() {
       // Always allow sign in
       return true;
     },

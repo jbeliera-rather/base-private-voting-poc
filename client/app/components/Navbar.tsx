@@ -1,13 +1,12 @@
 "use client";
 
-import { signIn, signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useState } from "react";
 import Tooltip from "./Tooltip";
 import { tooltipTexts } from "../utils/tooltipTexts";
-import { FarcasterAuth } from "../utils/farcaster-auth";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -17,24 +16,10 @@ export default function Navbar() {
   const handleSignIn = async () => {
     setIsSigningIn(true);
     try {
-      const result = await FarcasterAuth.signIn(window.location.pathname);
-      if (result.success) {
-        // Notify Farcaster client of successful authentication
-        FarcasterAuth.notifyAuthStatus(true);
-        router.refresh();
-      } else {
-        console.error('Farcaster sign in failed:', result.error);
-        // Notify Farcaster client of authentication error
-        FarcasterAuth.notifyAuthStatus(false, result.error);
-        // Fallback to standard NextAuth sign in
-        signIn("google", { callbackUrl: window.location.pathname });
-      }
+      // Redirect to device authentication page
+      router.push('/auth/signin');
     } catch (error) {
-      console.error('Farcaster auth error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      FarcasterAuth.notifyAuthStatus(false, errorMessage);
-      // Fallback to standard NextAuth sign in
-      signIn("google", { callbackUrl: window.location.pathname });
+      console.error('Navigation error:', error);
     } finally {
       setIsSigningIn(false);
     }

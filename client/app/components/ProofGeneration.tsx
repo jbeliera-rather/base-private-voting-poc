@@ -36,27 +36,12 @@ export default function VotingProofGeneration({ voting, setVoting }: ProofGenera
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
 
-  // Debug session changes
-  useEffect(() => {
-    console.log('Session status changed:', {
-      status,
-      hasSession: !!session,
-      sessionKeys: session ? Object.keys(session) : [],
-      hasToken: !!(session as { token?: unknown })?.token,
-      tokenKeys: (session as { token?: Record<string, unknown> })?.token ? Object.keys((session as { token?: Record<string, unknown> }).token || {}) : [],
-      hasIdToken: !!(session as { token?: { idToken?: string } })?.token?.idToken,
-    });
-  }, [session, status]);
 
-  // Function to refresh session
   const refreshSession = async () => {
     try {
-      console.log('Refreshing session...');
       const refreshed = await update();
-      console.log('Session refreshed');
       return refreshed;
     } catch (error) {
-      console.error('Failed to refresh session:', error);
       return null;
     }
   };
@@ -71,58 +56,13 @@ export default function VotingProofGeneration({ voting, setVoting }: ProofGenera
     return atob(base64);
   };
 
-  // Utility function to decode JWT payload
-  const decodeJWTPayload = (token: string) => {
-    try {
-      const parts = token.split('.');
-      if (parts.length !== 3) {
-        throw new Error('Invalid JWT format');
-      }
-      return JSON.parse(safeBase64Decode(parts[1]));
-    } catch (error) {
-      console.error('Error decoding JWT:', error);
-      return null;
-    }
-  };
 
-  // Function to get ID token from session cookie directly
-  const getSessionTokenFromCookie = () => {
-    try {
-      // Get the session token from the secure cookie
-      const cookies = document.cookie.split(';');
-      const sessionCookie = cookies.find(cookie => 
-        cookie.trim().startsWith('__Secure-next-auth.session-token=') || 
-        cookie.trim().startsWith('next-auth.session-token=')
-      );
-      
-      if (sessionCookie) {
-        const tokenValue = sessionCookie.split('=')[1];
-        console.log('Found session cookie:', tokenValue ? `${tokenValue.substring(0, 50)}...` : 'empty');
-        
-        if (tokenValue) {
-          const payload = decodeJWTPayload(tokenValue);
-          if (payload) {
-            console.log('Decoded session token payload:', payload);
-            return payload;
-          }
-        }
-      }
-      
-      console.log('No session cookie found');
-      return null;
-    } catch (error) {
-      console.error('Error reading session cookie:', error);
-      return null;
-    }
-  };
 
   async function getInputs() {
     if (status === "authenticated" && session) {
       try {
         setError(null);
 
-        console.log('Starting ID token retrieval...');
-        console.log('Full session object:', session);
         
         let idToken: string | null = null;
 
@@ -130,7 +70,6 @@ export default function VotingProofGeneration({ voting, setVoting }: ProofGenera
         const sessionWithToken = session as { token?: { idToken?: string } };
         if (sessionWithToken.token?.idToken) {
           idToken = sessionWithToken.token.idToken;
-          console.log('✓ Found ID token in session.token.idToken');
         }
 
         // Strategy 2: Check session.idToken directly (NextAuth session callback also stores here)
@@ -138,50 +77,35 @@ export default function VotingProofGeneration({ voting, setVoting }: ProofGenera
           const extendedSession = session as unknown as ExtendedSession;
           if (extendedSession.idToken) {
             idToken = extendedSession.idToken;
-            console.log('✓ Found ID token in session.idToken');
           }
         }
 
         // Strategy 4: Fetch fresh ID token from server
         if (!idToken) {
-          console.log('Fetching fresh ID token from server...');
           try {
             const idTokenResponse = await fetch('/api/auth/id-token');
             if (idTokenResponse.ok) {
               const data = await idTokenResponse.json();
               if (data.id_token) {
                 idToken = data.id_token;
-                console.log('✓ Retrieved fresh ID token from server');
-              } else {
-                console.warn('Server response missing id_token:', data);
               }
-            } else {
-              const error = await idTokenResponse.json();
-              console.warn('Server ID token fetch failed:', error);
             }
           } catch (e) {
-            console.warn('Error fetching ID token from server:', e);
+            // Continue to next strategy
           }
         }
 
         // Strategy 5: Try session refresh
         if (!idToken) {
-          console.log('Refreshing session...');
           const refreshedSession = await refreshSession();
           if (refreshedSession) {
             const refreshedToken = (refreshedSession as { token?: { idToken?: string } }).token?.idToken;
             const refreshedDirect = (refreshedSession as unknown as ExtendedSession).idToken;
-            
             idToken = refreshedToken || refreshedDirect || null;
-            if (idToken) {
-              console.log('✓ Found ID token after session refresh');
-            }
           }
         }
 
-        // Final check
         if (!idToken) {
-          console.error('All ID token retrieval strategies failed');
           throw new Error("ID token not available. Please sign out and sign back in to refresh your authentication.");
         }
 
@@ -309,40 +233,6 @@ export default function VotingProofGeneration({ voting, setVoting }: ProofGenera
 
   return (
     <div className="space-y-4">
-      {/* Debug information for development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded border">
-          <div className="flex justify-between items-start">
-            <div>
-              <strong>Debug Info:</strong><br/>
-              Status: {status}<br/>
-              Has Session: {session ? 'Yes' : 'No'}<br/>
-              Has Token Object: {session && (session as { token?: unknown }).token ? 'Yes' : 'No'}<br/>
-              Token ID Token: {session && (session as { token?: { idToken?: string } }).token?.idToken ? 'Yes' : 'No'}<br/>
-              Fallback ID Token: {session && (session as unknown as ExtendedSession).idToken ? 'Yes' : 'No'}
-            </div>
-            <div className="flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={refreshSession}
-                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
-              >
-                Refresh Session
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const payload = getSessionTokenFromCookie();
-                  console.log('Manual cookie check result:', payload);
-                }}
-                className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded hover:bg-green-200 dark:hover:bg-green-800"
-              >
-                Check Cookie
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       
       <div>
         <select

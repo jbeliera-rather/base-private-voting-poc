@@ -22,7 +22,7 @@ export async function generateProof(circuit: CompiledCircuit, inputs: InputMap )
     toast.remove("toast-message");
   
     toast.loading("Initializing backend... ⏳", {duration: 1_000_000, id: "toast-message"});
-    const backend = new UltraHonkBackend(circuit.bytecode);
+    const backend = new UltraHonkBackend(circuit.bytecode, { threads: 4 });
     toast.remove("toast-message");
     
     toast.loading("Generating proof... ⏳", {duration: 1_000_000, id: "toast-message"});
