@@ -630,7 +630,7 @@ export default function CreateVoting() {
               </div>
               <div className="space-y-4">
                 {formData.options.map((option, index) => (
-                  <div key={`option-${index}-${option.name || 'empty'}`} className="p-4 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
+                  <div key={`option-${index}`} className="p-4 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <label htmlFor={`option-${index}-name`} className="block text-sm font-medium text-gray-900 dark:text-white mb-1">
